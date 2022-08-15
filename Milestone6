@@ -1,0 +1,417 @@
+package Game;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Scanner;
+import java.util.Stack;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import base.Product;
+import base.ShoppingCart;
+import base.Storefront;
+import base.inventorymanager;
+import weapons.WeaponsInterface;
+
+
+public class Game {
+	public static void saveToFile(String filename, Product product, boolean append) {
+		PrintWriter pw;
+		try {
+			File file = new File(filename);
+			FileWriter fw = new FileWriter(file, append);
+			pw = new PrintWriter(fw);
+			
+			ObjectMapper objectMapper = new ObjectMapper();
+			String json = objectMapper.writeValueAsString(product);
+			pw.println(json);
+			
+			pw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+		public static LinkedList<Product> readFromFile(String filename) {
+			LinkedList<Product> products = new LinkedList<Product>();
+			try {
+				File file = new File(filename);
+				Scanner s = new Scanner(file);
+				
+				while(s.hasNext()) {
+					String json = s.nextLine();
+					ObjectMapper objectMapper = new ObjectMapper();
+					Product product = objectMapper.readValue(json, Product.class);
+					products.add(product);
+				}
+				s.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return products;
+		}
+
+	
+	public static void main(String[] args) throws IOException {
+		Storefront store = new Storefront();
+		Queue<String> Cart = new LinkedList<String>();
+		Scanner scnr = new Scanner(System.in);
+		inventorymanager<String> inventory = new inventorymanager<String>();
+		Socket socket = null;
+		InputStreamReader inputStreamReader = null;
+		OutputStreamWriter outputStreamWriter = null;
+		BufferedReader bufferedReader = null;
+		BufferedWriter bufferedWriter = null;
+		
+		try {
+			socket = new Socket("localhost", 6666);																		//connect to Remote Server on ip/port
+					
+			inputStreamReader = new InputStreamReader(socket.getInputStream());
+			outputStreamWriter = new OutputStreamWriter(socket.getOutputStream());
+			
+			bufferedReader = new BufferedReader(inputStreamReader);														//create input/output network buffers
+			bufferedWriter = new BufferedWriter(outputStreamWriter);
+			
+			Scanner scanner = new Scanner(System.in);scnr.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+}
+package Game;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Scanner;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import base.Product;
+import base.Storefront;
+import base.inventorymanager;
+import src.app.Server;
+
+public class Server extends Game{
+	private static ServerSocket serverSocket;
+	private Socket clientSocket;
+	private PrintWriter out;
+	private BufferedReader in;
+	
+	public static void saveToFile(String filename, List<Product> productsList, boolean append) {
+		PrintWriter pw;
+		try {
+			File file = new File(filename);
+			FileWriter fw = new FileWriter(file, append);
+			pw = new PrintWriter(fw);
+			
+			ObjectMapper objectMapper = new ObjectMapper();
+			String json = objectMapper.writeValueAsString(productsList);
+			pw.println(json);
+			
+			pw.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+		public static LinkedList<Product> readFromFile(String filename) {
+			LinkedList<Product> products = new LinkedList<Product>();
+			try {
+				File file = new File(filename);
+				Scanner s = new Scanner(file);
+				
+				while(s.hasNext()) {
+					String json = s.nextLine();
+					ObjectMapper objectMapper = new ObjectMapper();
+					Product product = objectMapper.readValue(json, Product.class);
+					products.add(product);
+				}
+				s.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return products;
+		}
+
+	public void start(int port) throws IOException {
+		System.out.println("Waiting for Client connection....");											//Wait for client ot connect
+		serverSocket = new ServerSocket(port);
+		clientSocket = serverSocket.accept();
+		
+		System.out.println("Recieved a Client connection on port " + clientSocket.getLocalPort());			//if client connects create buffers
+		out = new PrintWriter(clientSocket.getOutputStream(), true);
+		in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+}
+
+	public void adminFeatures(int port) throws IOException {
+		Scanner scnr = new Scanner(System.in);
+		
+		System.out.println("At anytime, press u to update the store contents with fresh products or r to return the store contents");
+		if (scnr.next().equals("u")) {
+			List<Product>productsList = readFromFile("inUsers.txt");										//read from inUsers File
+			for(int x=0;x<6;++x) {
+				saveToFile("out.json", productsList, true);													//save fresh store to out.json file
+			}
+			System.out.println(productsList);
+		} else if (scnr.next().equals("r")){
+			System.out.println(Product.class);
+			List<Product>productsList = readFromFile("out.json");											//returns the current state of store from out.json file
+			System.out.println(productsList);
+		}
+	}
+	public void cleanup() throws IOException {
+		in.close();																							//close all input and output network buffers/sockets
+		out.close();
+		clientSocket.close();
+		serverSocket.close();
+	}	
+	public static void main(String[] args) throws IOException {
+		Storefront store = new Storefront();
+		Queue<String> Cart = new LinkedList<String>();
+		Scanner scnr = new Scanner(System.in);
+		inventorymanager<String> inventory = new inventorymanager<String>();
+		
+		Server server = new Server();																					//create an instance of server port 6666
+		server.start(6666);
+		server.adminFeatures(6666);																						//returns features from server
+		System.out.println("Hello! Welcome to Storefront, press the q key to view the store or p to exit");				//prompt user to enter store or leave
+		String userinput = scnr.nextLine();
+		List<Product>productsList = readFromFile("inUsers.txt");
+		
+		if (userinput.equals("q")) {
+			for(Product products : productsList) {
+				System.out.println(productsList);
+		
+				System.out.println(" ");
+				System.out.println("Add an item to your cart by typing the name");
+				String itemname = scnr.nextLine();
+																														//loop as many times as there are items
+				if (itemname.equals(products.getName())) 
+				{
+					Cart.add(itemname);																					//add method from generics																		
+					break;
+				
+				}
+				System.out.println(" ");
+				Cart.add(itemname);
+				System.out.println("Your shopping cart contains " + Cart.peek());										//viewCart queue
+				System.out.println("To purchase items in shopping cart, type purchase or to remove the item type remove");	//purchase or remove items from shopping cart
+																					
+				if (scnr.nextLine().equals("purchase"))  {																																			
+					store.purchaseProduct(products);
+					System.out.println("Thank you for your purchase");	
+					inventory.add(itemname);																			//add method from generic
+				} else if (scnr.next().equals("remove")){		
+					Cart.remove(itemname);																				//exercise remove()
+					break;
+				}
+				System.out.println("To view your inventory, type view or else the store will close");	
+				if (scnr.nextLine().equals("view")) {
+					System.out.println(inventory.get());
+					System.out.println("Server connection closed, exiting store");
+					break;
+					} 
+			}	
+		}
+	server.cleanup();																									//exit and clean
+	scnr.close();
+	}
+}
+package base;
+
+public class Storefront {
+		
+		public void purchaseProduct(Product product) {
+			if (product.getQuantity() >= 1) {
+			product.setQuantity(product.getQuantity() - 1);
+		} else {
+			System.out.println("no products avialable");
+		}
+	}	
+		public void cancelPurchase(Product product) {
+			product.setQuantity(product.getQuantity() + 1);
+		}
+		public void viewStore(Product products[]) {
+			System.out.println(products);
+		}
+		public void viewProductInfo(Product product) {
+			System.out.println(product.getName());
+			System.out.println(product.getDescription());
+			System.out.println(product.getPrice());
+			System.out.println(product.getQuantity());		
+		}
+}
+package base;
+
+public class Product {	
+		public String name;
+		private String description;
+		private int price;
+		private int quantity;
+
+		public Product(String name, String description, int price, int quantity) {
+			super();
+			this.name = name;
+			this.description = description;
+			this.price = price;
+			this.quantity = quantity; 
+		}
+		public Product() {
+			System.out.println("Product object constructed");
+		}			
+		public String getName() {
+			return this.name;
+		}		
+		public void setName(String name) {
+			this.name = name;
+		}			
+		public String getDescription() {
+			return this.description;
+		}			
+		public void setDescription(String description) {
+			this.description = description;
+		}		
+		public int getPrice() {
+			return this.price;
+		}		
+		public void setPrice(int price) {
+			this.price = price;
+		}		
+		public int getQuantity() {
+			return this.quantity;
+		}		
+		public void setQuantity(int quantity) {
+			this.quantity = quantity;
+		}
+		public void displayProductDetails() {
+			System.out.println("Product name: " + this.name);
+			System.out.println("Product description: " + this.description);
+			System.out.println("Product price: " + this.price);
+			System.out.println("Product quantity: " + this.quantity);
+		}
+		public int compareTo(Product product) {
+			int value = this.name.compareTo(product.name);
+			if(value == 0) {
+				return this.name.compareTo(product.name);
+			} else {
+				return value;
+			}
+	}
+		public String toString() {
+			return name;
+		}
+}
+package base;
+
+import java.util.Queue;
+
+public class ShoppingCart<T> extends Storefront {
+	private T s;
+	
+	public void add(T s) {																		//this.t specify the t variable inside
+		this.s = s;
+	}
+	public T get() {
+		return s;
+	}
+	public void remove(T s) {
+		this.s = s;
+	}
+}
+package base;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Scanner;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import Armor.HeavyArmor;
+import Armor.LightArmor;
+import Health.Health;
+import weapons.Axe;
+import weapons.Gun;
+
+public class JsonFiles<T> {
+	public static void saveToFile(String filename, Product product, boolean append) {
+		PrintWriter pw;
+		try {
+			//Create a file File to write
+			File file = new File(filename);
+			FileWriter fw = new FileWriter(file, append);
+			pw = new PrintWriter(fw);
+			
+			//Write Product as JSON
+			ObjectMapper objectMapper = new ObjectMapper();																	//Object used to read/write JSON
+			String json = objectMapper.writeValueAsString(product);
+			pw.println(json);
+			
+			pw.close();
+		} catch (IOException e) {
+			//print exception
+			e.printStackTrace();
+		}
+	}
+		public static ArrayList<Product> readFromFile(String filename) {
+			ArrayList<Product> products = new ArrayList<Product>();
+			Iterator<Product> iterator = products.iterator();
+			try {
+				//Open the file File to read
+				File file = new File(filename);
+				Scanner s = new Scanner(file);
+				
+				//Create a list of products by reading JSON file
+				while(s.hasNext()) {
+					String json = s.nextLine();
+					ObjectMapper objectMapper = new ObjectMapper();
+					Product product = objectMapper.readValue(json, Product.class);
+					products.add(product);
+				}
+				s.close();
+				//print exception
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			//return list of products
+			return products;
+		}
+		
+	
+	public static void main(String[] args) {
+	}
+}
+
+
+
